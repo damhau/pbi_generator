@@ -100,6 +100,10 @@ def create_app() -> Flask:
 
     # ── Main pages ───────────────────────────────────────────────
 
+    @app.route("/healthz")
+    def healthz():
+        return "ok", 200
+    
     @app.route("/")
     @login_required
     def index():
