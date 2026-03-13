@@ -1,0 +1,15 @@
+services:
+  pbi-generator:
+    build: .
+    image: damienh/pbi_generator:latest
+    ports:
+      - "5000:5000"
+    volumes:
+      - pbi_data:/app/instance
+    environment:
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - DATABASE_URL=sqlite:////app/instance/pbi_generator.db
+    restart: unless-stopped
+
+volumes:
+  pbi_data:

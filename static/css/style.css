@@ -1,0 +1,95 @@
+/* PBI Generator - Custom Styles */
+
+body {
+    min-height: 100vh;
+    background: var(--bs-body-bg);
+}
+
+.navbar {
+    background: var(--bs-body-bg);
+    backdrop-filter: blur(10px);
+}
+
+.navbar-brand {
+    font-size: 1.25rem;
+    letter-spacing: -0.02em;
+}
+
+.card {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.75rem;
+    transition: box-shadow 0.2s;
+}
+
+.card:hover {
+    box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.15) !important;
+}
+
+.card-header {
+    border-radius: 0.75rem 0.75rem 0 0 !important;
+    font-weight: 600;
+}
+
+.btn {
+    border-radius: 0.5rem;
+    font-weight: 500;
+}
+
+.btn-lg {
+    padding: 0.75rem 1.5rem;
+}
+
+.form-control,
+.form-select {
+    border-radius: 0.5rem;
+}
+
+.form-control:focus,
+.form-select:focus {
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.15);
+}
+
+textarea.form-control {
+    resize: vertical;
+}
+
+.badge {
+    font-weight: 500;
+}
+
+#previewBody h5 {
+    color: var(--bs-primary);
+}
+
+#previewBody ul {
+    padding-left: 1.25rem;
+}
+
+#previewBody ul li {
+    margin-bottom: 0.25rem;
+}
+
+/* Loading spinner alignment */
+.spinner-border-sm {
+    vertical-align: -0.15em;
+}
+
+/* Empty state styling */
+#emptyState {
+    opacity: 0.7;
+}
+
+#emptyState i {
+    opacity: 0.5;
+}
+
+/* Smooth transitions */
+.card,
+.alert {
+    animation: fadeIn 0.2s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
