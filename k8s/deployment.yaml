@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pbi-generator
+  namespace: pbi-generator
+  labels:
+    app: pbi-generator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pbi-generator
+  template:
+    metadata:
+      labels:
+        app: pbi-generator
+    spec:
+      containers:
+        - name: pbi-generator
+          image: damienh/pbi_generator:latest
+          ports:
+            - containerPort: 5000
+              protocol: TCP
+          env:
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pbi-generator-secret
+                  key: SECRET_KEY
+            - name: DATABASE_URL
+              value: "sqlite:////data/pbi_generator.db"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /login
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /login
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: pbi-generator-data
