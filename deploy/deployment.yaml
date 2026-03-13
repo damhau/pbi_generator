@@ -17,6 +17,7 @@ spec:
       containers:
         - name: pbi-generator
           image: damienh/pbi_generator:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 5000
               protocol: TCP
