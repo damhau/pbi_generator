@@ -40,13 +40,13 @@ spec:
               memory: 256Mi
           livenessProbe:
             httpGet:
-              path: /login
+              path: /healthz
               port: 5000
             initialDelaySeconds: 10
             periodSeconds: 30
           readinessProbe:
             httpGet:
-              path: /login
+              path: /healthz
               port: 5000
             initialDelaySeconds: 5
             periodSeconds: 10
