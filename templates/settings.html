@@ -99,6 +99,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
+{% raw %}
 <script>
 const DEFAULT_PROMPT = `Create a scrum PBI for "{user_request}" and assign it to the right parent feature from the list below.
 Use the format: As a ..., I want to ... so that ...
@@ -208,4 +209,5 @@ document.getElementById('resetPromptBtn').addEventListener('click', () => {
 
 loadSettings();
 </script>
+{% endraw %}
 {% endblock %}
