@@ -15,7 +15,9 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(128), nullable=False)
-    settings = db.relationship("UserSettings", backref="user", uselist=False, cascade="all, delete-orphan")
+    settings = db.relationship(
+        "UserSettings", backref="user", uselist=False, cascade="all, delete-orphan"
+    )
 
     def set_password(self, password: str):
         self.password_hash = bcrypt.generate_password_hash(password).decode("utf-8")
@@ -39,7 +41,9 @@ class UserSettings(db.Model):
     azdo_project = db.Column(db.String(128), default="Hybrid Cloud Architecture")
     azdo_team = db.Column(db.String(128), default="Cloud Native")
     azdo_pat = db.Column(db.String(256), default="")
-    azdo_area_path = db.Column(db.String(256), default=r"Hybrid Cloud Architecture\Cloud Native Delivery")
+    azdo_area_path = db.Column(
+        db.String(256), default=r"Hybrid Cloud Architecture\Cloud Native Delivery"
+    )
 
     # PBI generation prompt
     pbi_prompt = db.Column(db.Text, default="")
@@ -82,7 +86,5 @@ Please return your response as a JSON object with the following structure:
 Additional instructions for the acceptance criteria:
 - do not do more than 5 acceptance criteria
 - not need to add acceptance criteria like "Rollback plan validated" "review sign-off" and "Monitoring/alerting checks in place" and "Go/No-Go criteria"
-- if it is an Openshift PBI always add "Gitops repository updated" in the acceptance criteria
-- if it is an Openshift PBI always add "Deployed on IKSTEST and IKSPROD" in the acceptance criteria
 - order the acceptance criteria in a logical order
 """
