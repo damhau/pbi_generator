@@ -44,6 +44,10 @@ class UserSettings(db.Model):
     # PBI generation prompt
     pbi_prompt = db.Column(db.Text, default="")
 
+    # System key opt-in flags (default: use system keys)
+    use_own_openai_key = db.Column(db.Boolean, default=False)
+    use_own_azdo_pat = db.Column(db.Boolean, default=False)
+
     def to_dict(self) -> dict:
         return {
             "openai_api_key": self.openai_api_key or "",
@@ -54,6 +58,8 @@ class UserSettings(db.Model):
             "azdo_pat": self.azdo_pat or "",
             "azdo_area_path": self.azdo_area_path or "",
             "pbi_prompt": self.pbi_prompt or DEFAULT_PROMPT,
+            "use_own_openai_key": self.use_own_openai_key or False,
+            "use_own_azdo_pat": self.use_own_azdo_pat or False,
         }
 
 

@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Admin - PBI Generator{% endblock %}
+{% block content %}
+<div class="pbi-settings">
+    <div class="pbi-settings__header">
+        <span class="pbi-settings__header-icon"><i class="bi bi-shield-lock"></i></span>
+        <h1 class="pbi-settings__header-title">Admin</h1>
+    </div>
+
+    <div id="adminAlert" style="display:none;"></div>
+
+    <div class="pbi-card">
+        <div class="pbi-card__header">
+            <h2 class="pbi-card__title">
+                <i class="bi bi-people pbi-card__title-icon"></i>
+                Users
+            </h2>
+        </div>
+        <div class="pbi-card__body" style="padding:0;">
+            <table class="pbi-table">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Settings</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="usersTableBody">
+                    <tr><td colspan="4" style="text-align:center;color:var(--gray-400);padding:2rem;">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function checkAuth(res) {
+    if (res.redirected || res.url.includes('/login')) {
+        window.location.href = '/login';
+        return false;
+    }
+    return true;
+}
+
+function showAlert(msg, type) {
+    const el = document.getElementById('adminAlert');
+    el.innerHTML = `<div class="pbi-alert pbi-alert--${type}"><i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-triangle'}"></i>${msg}<button class="pbi-alert__close" onclick="this.parentElement.parentElement.style.display='none'">&times;</button></div>`;
+    el.style.display = 'block';
+}
+
+async function loadUsers() {
+    try {
+        const res = await fetch('/api/admin/users');
+        if (!checkAuth(res)) return;
+        if (!res.ok) { showAlert('Failed to load users.', 'danger'); return; }
+        const users = await res.json();
+        const tbody = document.getElementById('usersTableBody');
+        if (!users.length) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--gray-400);padding:2rem;">No users found.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = users.map(u => `
+            <tr>
+                <td><strong>${esc(u.username)}</strong></td>
+                <td>${esc(u.email)}</td>
+                <td>${u.has_settings ? '<span class="pbi-badge pbi-badge--green">Configured</span>' : '<span class="pbi-badge pbi-badge--muted">None</span>'}</td>
+                <td style="text-align:right;">
+                    <button class="pbi-btn pbi-btn--ghost pbi-btn--sm" onclick="deleteUser(${u.id}, '${esc(u.username)}')" style="color:var(--red-600);">
+                        <i class="bi bi-trash"></i> Delete
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    } catch (e) {
+        showAlert('Network error loading users.', 'danger');
+    }
+}
+
+function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
+
+async function deleteUser(id, username) {
+    if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
+    try {
+        const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+        if (!checkAuth(res)) return;
+        const data = await res.json();
+        if (res.ok) {
+            showAlert(`User "${username}" deleted.`, 'success');
+            loadUsers();
+        } else {
+            showAlert(data.error || 'Failed to delete user.', 'danger');
+        }
+    } catch (e) {
+        showAlert('Network error.', 'danger');
+    }
+}
+
+loadUsers();
+</script>
+{% endblock %}

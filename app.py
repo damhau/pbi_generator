@@ -4,7 +4,7 @@ import json
 import logging
 import os
 
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, abort
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from openai import OpenAI
 
@@ -22,6 +22,26 @@ from azdo_client import (
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+ADMIN_USERNAMES = {"dhauser", "damien"}
+
+
+def is_admin():
+    return current_user.is_authenticated and current_user.username in ADMIN_USERNAMES
+
+
+def get_openai_key(settings):
+    """Return the effective OpenAI API key (system or personal)."""
+    if settings and settings.use_own_openai_key:
+        return settings.openai_api_key or ""
+    return os.environ.get("SYSTEM_OPENAI_API_KEY", "") or (settings.openai_api_key if settings else "")
+
+
+def get_azdo_pat(settings):
+    """Return the effective Azure DevOps PAT (system or personal)."""
+    if settings and settings.use_own_azdo_pat:
+        return settings.azdo_pat or ""
+    return os.environ.get("SYSTEM_AZDO_PAT", "") or (settings.azdo_pat if settings else "")
 
 
 def create_app() -> Flask:
@@ -44,6 +64,20 @@ def create_app() -> Flask:
 
     with app.app_context():
         db.create_all()
+        # Add new columns to existing databases
+        with db.engine.connect() as conn:
+            from sqlalchemy import inspect, text
+            inspector = inspect(db.engine)
+            cols = [c["name"] for c in inspector.get_columns("user_settings")]
+            if "use_own_openai_key" not in cols:
+                conn.execute(text("ALTER TABLE user_settings ADD COLUMN use_own_openai_key BOOLEAN DEFAULT 0"))
+            if "use_own_azdo_pat" not in cols:
+                conn.execute(text("ALTER TABLE user_settings ADD COLUMN use_own_azdo_pat BOOLEAN DEFAULT 0"))
+            conn.commit()
+
+    @app.context_processor
+    def inject_admin():
+        return {"is_admin": is_admin}
 
     # ── Auth routes ──────────────────────────────────────────────
 
@@ -102,7 +136,7 @@ def create_app() -> Flask:
     @app.route("/healthz")
     def healthz():
         return "ok", 200
-    
+
     @app.route("/")
     @login_required
     def index():
@@ -112,6 +146,49 @@ def create_app() -> Flask:
     @login_required
     def settings_page():
         return render_template("settings.html")
+
+    # ── Admin ────────────────────────────────────────────────────
+
+    @app.route("/admin")
+    @login_required
+    def admin_page():
+        if not is_admin():
+            abort(403)
+        return render_template("admin.html")
+
+    @app.route("/api/admin/users", methods=["GET"])
+    @login_required
+    def admin_list_users():
+        if not is_admin():
+            return jsonify({"error": "Forbidden"}), 403
+        users = User.query.all()
+        result = []
+        for u in users:
+            result.append({
+                "id": u.id,
+                "username": u.username,
+                "email": u.email,
+                "has_settings": u.settings is not None,
+                "use_system_keys": (
+                    not (u.settings.use_own_openai_key if u.settings else True)
+                    or not (u.settings.use_own_azdo_pat if u.settings else True)
+                ),
+            })
+        return jsonify(result)
+
+    @app.route("/api/admin/users/<int:user_id>", methods=["DELETE"])
+    @login_required
+    def admin_delete_user(user_id):
+        if not is_admin():
+            return jsonify({"error": "Forbidden"}), 403
+        if user_id == current_user.id:
+            return jsonify({"error": "Cannot delete yourself."}), 400
+        user = db.session.get(User, user_id)
+        if not user:
+            return jsonify({"error": "User not found."}), 404
+        db.session.delete(user)
+        db.session.commit()
+        return jsonify({"status": "ok"})
 
     # ── Settings API ─────────────────────────────────────────────
 
@@ -133,6 +210,9 @@ def create_app() -> Flask:
             data["azdo_pat_masked"] = data["azdo_pat"][:6] + "..." + data["azdo_pat"][-4:]
         else:
             data["azdo_pat_masked"] = ""
+        # System key availability
+        data["system_openai_available"] = bool(os.environ.get("SYSTEM_OPENAI_API_KEY"))
+        data["system_azdo_available"] = bool(os.environ.get("SYSTEM_AZDO_PAT"))
         return jsonify(data)
 
     @app.route("/api/settings", methods=["PUT"])
@@ -160,6 +240,10 @@ def create_app() -> Flask:
             s.azdo_area_path = data["azdo_area_path"]
         if "pbi_prompt" in data:
             s.pbi_prompt = data["pbi_prompt"]
+        if "use_own_openai_key" in data:
+            s.use_own_openai_key = bool(data["use_own_openai_key"])
+        if "use_own_azdo_pat" in data:
+            s.use_own_azdo_pat = bool(data["use_own_azdo_pat"])
 
         db.session.commit()
         return jsonify({"status": "ok"})
@@ -168,10 +252,11 @@ def create_app() -> Flask:
     @login_required
     def test_azdo_connection():
         s = current_user.settings
-        if not s or not s.azdo_pat or not s.azdo_org_url or not s.azdo_project:
+        pat = get_azdo_pat(s)
+        if not s or not pat or not s.azdo_org_url or not s.azdo_project:
             return jsonify({"status": "error", "message": "Azure DevOps settings are incomplete."}), 400
         try:
-            azdo = AzDoClient(s.azdo_org_url, s.azdo_project, s.azdo_pat)
+            azdo = AzDoClient(s.azdo_org_url, s.azdo_project, pat)
             azdo.get_project_info()
             return jsonify({"status": "ok", "message": "Connected successfully."})
         except Exception as e:
@@ -183,12 +268,13 @@ def create_app() -> Flask:
     @login_required
     def list_epics():
         s = current_user.settings
-        if not s or not s.azdo_pat:
+        pat = get_azdo_pat(s)
+        if not s or not pat:
             logger.info("Epics 400: no settings or no PAT. has_settings=%s, has_pat=%s",
-                        s is not None, bool(s and s.azdo_pat))
+                        s is not None, bool(pat))
             return jsonify({"error": "Azure DevOps not configured."}), 400
         try:
-            azdo = AzDoClient(s.azdo_org_url, s.azdo_project, s.azdo_pat)
+            azdo = AzDoClient(s.azdo_org_url, s.azdo_project, pat)
             epics = get_epics(azdo, s.azdo_area_path)
             return jsonify(epics)
         except Exception as e:
@@ -199,13 +285,14 @@ def create_app() -> Flask:
     @login_required
     def list_features():
         s = current_user.settings
-        if not s or not s.azdo_pat:
+        pat = get_azdo_pat(s)
+        if not s or not pat:
             return jsonify({"error": "Azure DevOps not configured."}), 400
         epic_title = request.args.get("epic_title", "")
         if not epic_title:
             return jsonify({"error": "epic_title parameter required."}), 400
         try:
-            azdo = AzDoClient(s.azdo_org_url, s.azdo_project, s.azdo_pat)
+            azdo = AzDoClient(s.azdo_org_url, s.azdo_project, pat)
             features = get_features_from_epic(azdo, epic_title, s.azdo_area_path)
             return jsonify(features)
         except Exception as e:
@@ -217,7 +304,8 @@ def create_app() -> Flask:
     @login_required
     def generate_pbi():
         s = current_user.settings
-        if not s or not s.openai_api_key:
+        openai_key = get_openai_key(s)
+        if not openai_key:
             return jsonify({"error": "OpenAI API key not configured."}), 400
 
         data = request.get_json()
@@ -229,7 +317,8 @@ def create_app() -> Flask:
             return jsonify({"error": "Request description is required."}), 400
 
         try:
-            oai = OpenAI(api_key=s.openai_api_key)
+            oai = OpenAI(api_key=openai_key)
+            pat = get_azdo_pat(s)
 
             # Build features context
             features_context = ""
@@ -239,8 +328,8 @@ def create_app() -> Flask:
             if parent_feature_id:
                 features_context = f"**PARENT FEATURE OVERRIDE**: Use feature ID {parent_feature_id}."
                 selected_feature_id = str(parent_feature_id)
-            elif epic_title and s.azdo_pat:
-                azdo = AzDoClient(s.azdo_org_url, s.azdo_project, s.azdo_pat)
+            elif epic_title and pat:
+                azdo = AzDoClient(s.azdo_org_url, s.azdo_project, pat)
                 available_features = get_features_from_epic(azdo, epic_title, s.azdo_area_path)
                 if available_features:
                     features_context = "**AVAILABLE PARENT FEATURES**:\n"
@@ -310,7 +399,8 @@ def create_app() -> Flask:
     @login_required
     def create_pbi():
         s = current_user.settings
-        if not s or not s.azdo_pat:
+        pat = get_azdo_pat(s)
+        if not s or not pat:
             return jsonify({"error": "Azure DevOps not configured."}), 400
 
         data = request.get_json()
@@ -323,7 +413,7 @@ def create_app() -> Flask:
             return jsonify({"error": "PBI data is required."}), 400
 
         try:
-            azdo = AzDoClient(s.azdo_org_url, s.azdo_project, s.azdo_pat)
+            azdo = AzDoClient(s.azdo_org_url, s.azdo_project, pat)
 
             # Validate parent feature
             if pbi_data.get("parent_feature_id"):

@@ -19,15 +19,25 @@
             </h2>
         </div>
         <div class="pbi-card__body">
-            <div class="pbi-field">
+            <div id="openaiSystemKeyInfo" class="pbi-system-key-info" style="display:none;">
+                <i class="bi bi-check-circle-fill"></i>
+                <span>Using system API key</span>
+                <button class="pbi-btn pbi-btn--ghost pbi-btn--sm" onclick="toggleOwnOpenaiKey(true)">Use my own key instead</button>
+            </div>
+            <div id="openaiKeyField" class="pbi-field">
                 <label for="openaiKey" class="pbi-label">API Key</label>
-                <div class="pbi-input-group">
-                    <input type="password" class="pbi-input" id="openaiKey" placeholder="sk-...">
-                    <button class="pbi-btn-icon" type="button" onclick="toggleVisibility('openaiKey')">
-                        <i class="bi bi-eye"></i>
-                    </button>
+                <div style="display:flex;gap:0.5rem;align-items:start;">
+                    <div style="flex:1;">
+                        <div class="pbi-input-group">
+                            <input type="password" class="pbi-input" id="openaiKey" placeholder="sk-...">
+                            <button class="pbi-btn-icon" type="button" onclick="toggleVisibility('openaiKey')">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+                        <div class="pbi-hint" id="openaiKeyHint"></div>
+                    </div>
+                    <button id="openaiUseSystemBtn" class="pbi-btn pbi-btn--ghost pbi-btn--sm" style="display:none;margin-top:2px;" onclick="toggleOwnOpenaiKey(false)">Use system key</button>
                 </div>
-                <div class="pbi-hint" id="openaiKeyHint"></div>
             </div>
             <div class="pbi-field">
                 <label for="openaiModel" class="pbi-label">Model</label>
@@ -73,15 +83,25 @@
                 <label for="azdoAreaPath" class="pbi-label">Area Path</label>
                 <input type="text" class="pbi-input" id="azdoAreaPath" placeholder="Project\Team\Area">
             </div>
-            <div class="pbi-field">
+            <div id="azdoSystemKeyInfo" class="pbi-system-key-info" style="display:none;">
+                <i class="bi bi-check-circle-fill"></i>
+                <span>Using system PAT</span>
+                <button class="pbi-btn pbi-btn--ghost pbi-btn--sm" onclick="toggleOwnAzdoPat(true)">Use my own PAT instead</button>
+            </div>
+            <div id="azdoPatField" class="pbi-field">
                 <label for="azdoPat" class="pbi-label">Personal Access Token</label>
-                <div class="pbi-input-group">
-                    <input type="password" class="pbi-input" id="azdoPat" placeholder="PAT token">
-                    <button class="pbi-btn-icon" type="button" onclick="toggleVisibility('azdoPat')">
-                        <i class="bi bi-eye"></i>
-                    </button>
+                <div style="display:flex;gap:0.5rem;align-items:start;">
+                    <div style="flex:1;">
+                        <div class="pbi-input-group">
+                            <input type="password" class="pbi-input" id="azdoPat" placeholder="PAT token">
+                            <button class="pbi-btn-icon" type="button" onclick="toggleVisibility('azdoPat')">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+                        <div class="pbi-hint" id="azdoPatHint"></div>
+                    </div>
+                    <button id="azdoUseSystemBtn" class="pbi-btn pbi-btn--ghost pbi-btn--sm" style="display:none;margin-top:2px;" onclick="toggleOwnAzdoPat(false)">Use system PAT</button>
                 </div>
-                <div class="pbi-hint" id="azdoPatHint"></div>
             </div>
         </div>
     </div>
@@ -153,10 +173,59 @@ function toggleVisibility(id) {
     el.type = el.type === 'password' ? 'text' : 'password';
 }
 
+let useOwnOpenaiKey = false;
+let useOwnAzdoPat = false;
+let systemOpenaiAvailable = false;
+let systemAzdoAvailable = false;
+
 function showAlert(msg, type) {
     const el = document.getElementById('settingsAlert');
     el.innerHTML = `<div class="pbi-alert pbi-alert--${type}"><i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-triangle'}"></i>${msg}<button class="pbi-alert__close" onclick="this.parentElement.parentElement.style.display='none'">&times;</button></div>`;
     el.style.display = 'block';
+}
+
+function toggleOwnOpenaiKey(useOwn) {
+    useOwnOpenaiKey = useOwn;
+    updateSystemKeyUI();
+}
+
+function toggleOwnAzdoPat(useOwn) {
+    useOwnAzdoPat = useOwn;
+    updateSystemKeyUI();
+}
+
+function updateSystemKeyUI() {
+    const openaiSysInfo = document.getElementById('openaiSystemKeyInfo');
+    const openaiKeyField = document.getElementById('openaiKeyField');
+    const openaiUseSystemBtn = document.getElementById('openaiUseSystemBtn');
+    const dotOai = document.getElementById('dotOpenai');
+
+    if (systemOpenaiAvailable && !useOwnOpenaiKey) {
+        openaiSysInfo.style.display = 'flex';
+        openaiKeyField.style.display = 'none';
+        dotOai.classList.add('pbi-dot--ok');
+        dotOai.title = 'Using system key';
+    } else {
+        openaiSysInfo.style.display = 'none';
+        openaiKeyField.style.display = 'block';
+        openaiUseSystemBtn.style.display = systemOpenaiAvailable ? 'inline-flex' : 'none';
+    }
+
+    const azdoSysInfo = document.getElementById('azdoSystemKeyInfo');
+    const azdoPatField = document.getElementById('azdoPatField');
+    const azdoUseSystemBtn = document.getElementById('azdoUseSystemBtn');
+    const dotAzdo = document.getElementById('dotAzdo');
+
+    if (systemAzdoAvailable && !useOwnAzdoPat) {
+        azdoSysInfo.style.display = 'flex';
+        azdoPatField.style.display = 'none';
+        dotAzdo.classList.add('pbi-dot--ok');
+        dotAzdo.title = 'Using system PAT';
+    } else {
+        azdoSysInfo.style.display = 'none';
+        azdoPatField.style.display = 'block';
+        azdoUseSystemBtn.style.display = systemAzdoAvailable ? 'inline-flex' : 'none';
+    }
 }
 
 async function loadSettings() {
@@ -170,6 +239,12 @@ async function loadSettings() {
         document.getElementById('azdoTeam').value = data.azdo_team || '';
         document.getElementById('azdoAreaPath').value = data.azdo_area_path || '';
         document.getElementById('pbiPrompt').value = data.pbi_prompt || DEFAULT_PROMPT;
+
+        systemOpenaiAvailable = data.system_openai_available || false;
+        systemAzdoAvailable = data.system_azdo_available || false;
+        useOwnOpenaiKey = data.use_own_openai_key || false;
+        useOwnAzdoPat = data.use_own_azdo_pat || false;
+
         const dotOai = document.getElementById('dotOpenai');
         if (data.openai_api_key_masked) {
             document.getElementById('openaiKeyHint').textContent = 'Current: ' + data.openai_api_key_masked;
@@ -188,6 +263,8 @@ async function loadSettings() {
             dotAzdo.classList.remove('pbi-dot--ok');
             dotAzdo.title = 'Not configured';
         }
+
+        updateSystemKeyUI();
     } catch (e) {
         showAlert('Failed to load settings.', 'danger');
     }
@@ -203,6 +280,8 @@ document.getElementById('saveSettingsBtn').addEventListener('click', async () =>
         azdo_pat: document.getElementById('azdoPat').value,
         azdo_area_path: document.getElementById('azdoAreaPath').value,
         pbi_prompt: document.getElementById('pbiPrompt').value,
+        use_own_openai_key: useOwnOpenaiKey,
+        use_own_azdo_pat: useOwnAzdoPat,
     };
     try {
         const res = await fetch('/api/settings', {

@@ -791,6 +791,58 @@ main.pbi-main {
   background: var(--green-600);
 }
 
+/* ── Table ──────────────────────────────────────────────── */
+.pbi-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.pbi-table th {
+  text-align: left;
+  padding: 0.55rem 1rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--gray-50);
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.pbi-table td {
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--gray-100);
+  color: var(--gray-700);
+}
+
+.pbi-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.pbi-table tbody tr:hover {
+  background: var(--gray-50);
+}
+
+/* ── System key info ───────────────────────────────────── */
+.pbi-system-key-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  background: var(--green-50);
+  border: 1px solid var(--green-100);
+  color: var(--green-700);
+  font-size: 0.8rem;
+  font-weight: 500;
+  margin-bottom: 0.85rem;
+}
+
+.pbi-system-key-info .pbi-btn {
+  margin-left: auto;
+}
+
 /* ── Utility ────────────────────────────────────────────── */
 .flex-fill { flex: 1 1 auto; }
 
