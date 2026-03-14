@@ -64,7 +64,7 @@ a:hover { color: var(--blue-700); text-decoration: underline; }
 
 /* ── Layout ─────────────────────────────────────────────── */
 main.pbi-main {
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 1.5rem 2rem;
 }
@@ -244,8 +244,6 @@ main.pbi-main {
   border: 1px solid var(--gray-200);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
-  max-height: 600px;
-  overflow-y: auto;
 }
 
 .pbi-card__header {
@@ -274,7 +272,7 @@ main.pbi-main {
 }
 
 .pbi-card__body {
-  padding: 1rem;
+  padding: 1.25rem;
 }
 
 .pbi-card__footer {
@@ -333,7 +331,7 @@ main.pbi-main {
 
 .pbi-textarea {
   resize: vertical;
-  min-height: 80px;
+  min-height: 100px;
   line-height: 1.6;
 }
 
@@ -474,8 +472,8 @@ main.pbi-main {
 /* ── Two-column Layout (Index) ──────────────────────────── */
 .pbi-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.25rem;
+  grid-template-columns: 2fr 3fr;
+  gap: 1.5rem;
   align-items: start;
 }
 
