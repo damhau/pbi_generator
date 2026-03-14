@@ -20,7 +20,7 @@ from azdo_client import (
     validate_parent_feature,
 )
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=getattr(logging, os.environ.get("LOG_LEVEL", "INFO").upper(), logging.INFO))
 logger = logging.getLogger(__name__)
 
 ADMIN_USERNAMES = {"dhauser", "damien"}
