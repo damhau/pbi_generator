@@ -3,6 +3,9 @@
 import json
 import logging
 import os
+import threading
+import time
+import uuid
 
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, abort
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
@@ -28,6 +31,21 @@ for _name in ("urllib3", "httpcore", "httpx", "openai"):
 logger = logging.getLogger(__name__)
 
 ADMIN_USERNAMES = {"dhauser", "damien"}
+
+# In-memory job store for async PBI generation
+_jobs = {}
+_jobs_lock = threading.Lock()
+_JOB_TTL = 600  # 10 minutes
+
+
+def _cleanup_old_jobs():
+    """Remove job entries older than _JOB_TTL seconds."""
+    now = time.time()
+    expired = [jid for jid, j in _jobs.items() if now - j["created_at"] > _JOB_TTL]
+    for jid in expired:
+        del _jobs[jid]
+    if expired:
+        logger.debug("Cleaned up %d expired jobs", len(expired))
 
 
 def is_admin():
@@ -340,64 +358,18 @@ def create_app() -> Flask:
 
     # ── PBI Generation API ───────────────────────────────────────
 
-    @app.route("/api/generate", methods=["POST"])
-    @login_required
-    def generate_pbi():
-        s = current_user.settings
-        openai_key = get_openai_key(s)
-        if not openai_key:
-            logger.info("Generate 400 for user '%s': no OpenAI key", current_user.username)
-            return jsonify({"error": "OpenAI API key not configured."}), 400
-
-        data = request.get_json()
-        user_request = data.get("request", "").strip()
-        epic_title = data.get("epic_title", "")
-        parent_feature_id = data.get("parent_feature_id")
-
-        if not user_request:
-            return jsonify({"error": "Request description is required."}), 400
-
-        logger.info("Generating PBI for user '%s': request='%s', epic='%s'",
-                     current_user.username, user_request[:80], epic_title)
-
+    def _run_generate_job(job_id, openai_key, model, prompt, available_features, username):
+        """Background worker for PBI generation via OpenAI."""
         try:
+            logger.debug("Job %s: calling OpenAI model=%s for user '%s'", job_id, model, username)
             oai = OpenAI(api_key=openai_key)
-            pat = get_azdo_pat(s)
-
-            # Build features context
-            features_context = ""
-            selected_feature_id = "null"
-            available_features = []
-
-            if parent_feature_id:
-                features_context = f"**PARENT FEATURE OVERRIDE**: Use feature ID {parent_feature_id}."
-                selected_feature_id = str(parent_feature_id)
-            elif epic_title and pat:
-                logger.debug("Fetching features for epic '%s' to build prompt context", epic_title)
-                azdo = AzDoClient(s.azdo_org_url, s.azdo_project, pat)
-                available_features = get_features_from_epic(azdo, epic_title, s.azdo_area_path)
-                if available_features:
-                    features_context = "**AVAILABLE PARENT FEATURES**:\n"
-                    for f in available_features:
-                        desc_preview = (f.get("description", "")[:100] + "...") if len(f.get("description", "")) > 100 else f.get("description", "No description")
-                        features_context += f"- ID {f['id']}: {f['title']}\n  {desc_preview}\n\n"
-                    selected_feature_id = "ID_FROM_LIST_OR_null"
-
-            prompt_template = s.pbi_prompt or DEFAULT_PROMPT
-            prompt = prompt_template.format(
-                user_request=user_request,
-                features_context=features_context,
-                selected_feature_id=selected_feature_id,
-            )
-
-            logger.debug("Calling OpenAI model=%s for user '%s'", s.openai_model or "gpt-5", current_user.username)
             response = oai.chat.completions.create(
-                model=s.openai_model or "gpt-5",
+                model=model,
                 messages=[{"role": "user", "content": prompt}],
             )
 
             content = response.choices[0].message.content.strip()
-            logger.debug("OpenAI raw response (first 200 chars): %s", content[:200])
+            logger.debug("Job %s: OpenAI raw response (first 200 chars): %s", job_id, content[:200])
 
             # Strip markdown code fences
             if content.startswith("```json"):
@@ -413,8 +385,7 @@ def create_app() -> Flask:
             # Validate
             for field in ("title", "description", "acceptance_criteria", "priority", "effort"):
                 if field not in pbi_data:
-                    logger.info("Generated PBI missing field '%s'", field)
-                    return jsonify({"error": f"Missing field: {field}"}), 400
+                    raise ValueError(f"Missing field: {field}")
 
             # Normalize parent_feature_id
             pid = pbi_data.get("parent_feature_id")
@@ -437,16 +408,106 @@ def create_app() -> Flask:
                         break
             pbi_data["parent_feature_name"] = pf_name
 
-            logger.info("PBI generated successfully for user '%s': title='%s'",
-                        current_user.username, pbi_data.get("title", "")[:60])
-            return jsonify(pbi_data)
+            logger.info("Job %s: PBI generated for user '%s': title='%s'",
+                        job_id, username, pbi_data.get("title", "")[:60])
+            with _jobs_lock:
+                _jobs[job_id]["status"] = "done"
+                _jobs[job_id]["result"] = pbi_data
 
-        except json.JSONDecodeError as e:
-            logger.exception("Failed to parse AI response as JSON for user '%s'", current_user.username)
-            return jsonify({"error": "Failed to parse AI response as JSON. Try again."}), 400
+        except json.JSONDecodeError:
+            logger.exception("Job %s: failed to parse AI response as JSON", job_id)
+            with _jobs_lock:
+                _jobs[job_id]["status"] = "error"
+                _jobs[job_id]["error"] = "Failed to parse AI response as JSON. Try again."
         except Exception as e:
-            logger.exception("Generate error for user '%s'", current_user.username)
-            return jsonify({"error": str(e)}), 500
+            logger.exception("Job %s: generate error", job_id)
+            with _jobs_lock:
+                _jobs[job_id]["status"] = "error"
+                _jobs[job_id]["error"] = str(e)
+
+    @app.route("/api/generate", methods=["POST"])
+    @login_required
+    def generate_pbi():
+        s = current_user.settings
+        openai_key = get_openai_key(s)
+        if not openai_key:
+            logger.info("Generate 400 for user '%s': no OpenAI key", current_user.username)
+            return jsonify({"error": "OpenAI API key not configured."}), 400
+
+        data = request.get_json()
+        user_request = data.get("request", "").strip()
+        epic_title = data.get("epic_title", "")
+        parent_feature_id = data.get("parent_feature_id")
+
+        if not user_request:
+            return jsonify({"error": "Request description is required."}), 400
+
+        logger.info("Generating PBI for user '%s': request='%s', epic='%s'",
+                     current_user.username, user_request[:80], epic_title)
+
+        # Build features context (synchronous — fast AzDO calls)
+        pat = get_azdo_pat(s)
+        features_context = ""
+        selected_feature_id = "null"
+        available_features = []
+
+        if parent_feature_id:
+            features_context = f"**PARENT FEATURE OVERRIDE**: Use feature ID {parent_feature_id}."
+            selected_feature_id = str(parent_feature_id)
+        elif epic_title and pat:
+            logger.debug("Fetching features for epic '%s' to build prompt context", epic_title)
+            azdo = AzDoClient(s.azdo_org_url, s.azdo_project, pat)
+            available_features = get_features_from_epic(azdo, epic_title, s.azdo_area_path)
+            if available_features:
+                features_context = "**AVAILABLE PARENT FEATURES**:\n"
+                for f in available_features:
+                    desc_preview = (f.get("description", "")[:100] + "...") if len(f.get("description", "")) > 100 else f.get("description", "No description")
+                    features_context += f"- ID {f['id']}: {f['title']}\n  {desc_preview}\n\n"
+                selected_feature_id = "ID_FROM_LIST_OR_null"
+
+        prompt_template = s.pbi_prompt or DEFAULT_PROMPT
+        prompt = prompt_template.format(
+            user_request=user_request,
+            features_context=features_context,
+            selected_feature_id=selected_feature_id,
+        )
+
+        model = s.openai_model or "gpt-5"
+        username = current_user.username
+
+        # Create job and start background thread
+        job_id = str(uuid.uuid4())
+        with _jobs_lock:
+            _cleanup_old_jobs()
+            _jobs[job_id] = {
+                "status": "pending",
+                "result": None,
+                "error": None,
+                "created_at": time.time(),
+            }
+
+        thread = threading.Thread(
+            target=_run_generate_job,
+            args=(job_id, openai_key, model, prompt, available_features, username),
+            daemon=True,
+        )
+        thread.start()
+
+        logger.debug("Job %s started for user '%s'", job_id, username)
+        return jsonify({"job_id": job_id}), 202
+
+    @app.route("/api/generate/<job_id>", methods=["GET"])
+    @login_required
+    def poll_generate(job_id):
+        with _jobs_lock:
+            job = _jobs.get(job_id)
+        if not job:
+            return jsonify({"error": "Job not found."}), 404
+        if job["status"] == "done":
+            return jsonify({"status": "done", "result": job["result"]})
+        if job["status"] == "error":
+            return jsonify({"status": "error", "error": job["error"]})
+        return jsonify({"status": "pending"})
 
     @app.route("/api/create", methods=["POST"])
     @login_required
