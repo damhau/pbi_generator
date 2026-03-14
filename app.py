@@ -358,9 +358,43 @@ def create_app() -> Flask:
 
     # ── PBI Generation API ───────────────────────────────────────
 
-    def _run_generate_job(job_id, openai_key, model, prompt, available_features, username):
+    def _set_job_stage(job_id, stage):
+        with _jobs_lock:
+            if job_id in _jobs:
+                _jobs[job_id]["stage"] = stage
+
+    def _run_generate_job(job_id, openai_key, model, prompt_template, user_request,
+                          epic_title, parent_feature_id, pat, azdo_settings, username):
         """Background worker for PBI generation via OpenAI."""
         try:
+            # ── Stage 1: Build features context ──
+            _set_job_stage(job_id, "fetching_features")
+            features_context = ""
+            selected_feature_id = "null"
+            available_features = []
+
+            if parent_feature_id:
+                features_context = f"**PARENT FEATURE OVERRIDE**: Use feature ID {parent_feature_id}."
+                selected_feature_id = str(parent_feature_id)
+            elif epic_title and pat:
+                logger.debug("Job %s: fetching features for epic '%s'", job_id, epic_title)
+                azdo = AzDoClient(azdo_settings["org_url"], azdo_settings["project"], pat)
+                available_features = get_features_from_epic(azdo, epic_title, azdo_settings["area_path"])
+                if available_features:
+                    features_context = "**AVAILABLE PARENT FEATURES**:\n"
+                    for f in available_features:
+                        desc_preview = (f.get("description", "")[:100] + "...") if len(f.get("description", "")) > 100 else f.get("description", "No description")
+                        features_context += f"- ID {f['id']}: {f['title']}\n  {desc_preview}\n\n"
+                    selected_feature_id = "ID_FROM_LIST_OR_null"
+
+            prompt = prompt_template.format(
+                user_request=user_request,
+                features_context=features_context,
+                selected_feature_id=selected_feature_id,
+            )
+
+            # ── Stage 2: Call OpenAI ──
+            _set_job_stage(job_id, "calling_ai")
             logger.debug("Job %s: calling OpenAI model=%s for user '%s'", job_id, model, username)
             oai = OpenAI(api_key=openai_key)
             response = oai.chat.completions.create(
@@ -368,6 +402,8 @@ def create_app() -> Flask:
                 messages=[{"role": "user", "content": prompt}],
             )
 
+            # ── Stage 3: Parse response ──
+            _set_job_stage(job_id, "parsing_response")
             content = response.choices[0].message.content.strip()
             logger.debug("Job %s: OpenAI raw response (first 200 chars): %s", job_id, content[:200])
 
@@ -445,35 +481,15 @@ def create_app() -> Flask:
         logger.info("Generating PBI for user '%s': request='%s', epic='%s'",
                      current_user.username, user_request[:80], epic_title)
 
-        # Build features context (synchronous — fast AzDO calls)
         pat = get_azdo_pat(s)
-        features_context = ""
-        selected_feature_id = "null"
-        available_features = []
-
-        if parent_feature_id:
-            features_context = f"**PARENT FEATURE OVERRIDE**: Use feature ID {parent_feature_id}."
-            selected_feature_id = str(parent_feature_id)
-        elif epic_title and pat:
-            logger.debug("Fetching features for epic '%s' to build prompt context", epic_title)
-            azdo = AzDoClient(s.azdo_org_url, s.azdo_project, pat)
-            available_features = get_features_from_epic(azdo, epic_title, s.azdo_area_path)
-            if available_features:
-                features_context = "**AVAILABLE PARENT FEATURES**:\n"
-                for f in available_features:
-                    desc_preview = (f.get("description", "")[:100] + "...") if len(f.get("description", "")) > 100 else f.get("description", "No description")
-                    features_context += f"- ID {f['id']}: {f['title']}\n  {desc_preview}\n\n"
-                selected_feature_id = "ID_FROM_LIST_OR_null"
-
         prompt_template = s.pbi_prompt or DEFAULT_PROMPT
-        prompt = prompt_template.format(
-            user_request=user_request,
-            features_context=features_context,
-            selected_feature_id=selected_feature_id,
-        )
-
         model = s.openai_model or "gpt-5"
         username = current_user.username
+        azdo_settings = {
+            "org_url": s.azdo_org_url if s else "",
+            "project": s.azdo_project if s else "",
+            "area_path": s.azdo_area_path if s else "",
+        }
 
         # Create job and start background thread
         job_id = str(uuid.uuid4())
@@ -481,6 +497,7 @@ def create_app() -> Flask:
             _cleanup_old_jobs()
             _jobs[job_id] = {
                 "status": "pending",
+                "stage": "queued",
                 "result": None,
                 "error": None,
                 "created_at": time.time(),
@@ -488,7 +505,8 @@ def create_app() -> Flask:
 
         thread = threading.Thread(
             target=_run_generate_job,
-            args=(job_id, openai_key, model, prompt, available_features, username),
+            args=(job_id, openai_key, model, prompt_template, user_request,
+                  epic_title, parent_feature_id, pat, azdo_settings, username),
             daemon=True,
         )
         thread.start()
@@ -507,7 +525,7 @@ def create_app() -> Flask:
             return jsonify({"status": "done", "result": job["result"]})
         if job["status"] == "error":
             return jsonify({"status": "error", "error": job["error"]})
-        return jsonify({"status": "pending"})
+        return jsonify({"status": "pending", "stage": job.get("stage", "queued")})
 
     @app.route("/api/create", methods=["POST"])
     @login_required

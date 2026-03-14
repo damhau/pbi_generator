@@ -76,28 +76,19 @@ async function generatePbi() {
     document.getElementById('emptyState').style.display = 'none';
     document.getElementById('resultCard').style.display = 'none';
 
-    const steps = [
-        'Submitting request...',
-        'Fetching features...',
-        'Generating PBI with AI...',
-        'Still generating...',
-        'Almost there...',
-    ];
-    let stepIdx = 0;
-    const startTime = Date.now();
-    btn.innerHTML = `<span class="pbi-spinner"></span> ${steps[0]}`;
+    const stageLabels = {
+        queued: 'Submitting request...',
+        fetching_features: 'Fetching features from Azure DevOps...',
+        calling_ai: 'Generating PBI with AI...',
+        parsing_response: 'Parsing AI response...',
+    };
+    let currentStage = 'queued';
+    btn.innerHTML = `<span class="pbi-spinner"></span> ${stageLabels.queued}`;
 
-    const updateSpinnerStep = () => {
-        const elapsed = (Date.now() - startTime) / 1000;
-        let newIdx;
-        if (elapsed < 3) newIdx = 0;
-        else if (elapsed < 6) newIdx = 1;
-        else if (elapsed < 20) newIdx = 2;
-        else if (elapsed < 40) newIdx = 3;
-        else newIdx = 4;
-        if (newIdx !== stepIdx) {
-            stepIdx = newIdx;
-            btn.innerHTML = `<span class="pbi-spinner"></span> ${steps[stepIdx]}`;
+    const updateSpinnerFromStage = (stage) => {
+        if (stage && stage !== currentStage) {
+            currentStage = stage;
+            btn.innerHTML = `<span class="pbi-spinner"></span> ${stageLabels[stage] || stage}`;
         }
     };
 
@@ -131,7 +122,6 @@ async function generatePbi() {
         // Poll for result
         const data = await new Promise((resolve, reject) => {
             const poll = setInterval(async () => {
-                updateSpinnerStep();
                 try {
                     const pollRes = await fetch(`/api/generate/${jobId}`);
                     if (!checkAuth(pollRes)) { clearInterval(poll); reject(new Error('Auth redirect')); return; }
@@ -143,8 +133,9 @@ async function generatePbi() {
                     } else if (pollData.status === 'error') {
                         clearInterval(poll);
                         reject(new Error(pollData.error || 'Generation failed.'));
+                    } else {
+                        updateSpinnerFromStage(pollData.stage);
                     }
-                    // else pending — keep polling
                 } catch (err) {
                     clearInterval(poll);
                     reject(err);
