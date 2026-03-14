@@ -13,6 +13,7 @@ RUN mkdir -p /app/instance
 
 ENV FLASK_APP=app.py
 ENV PYTHONUNBUFFERED=1
+ENV UV_CACHE_DIR=/tmp/uv-cache
 
 EXPOSE 5000
 

@@ -16,5 +16,5 @@ dependencies = [
 [project.scripts]
 pbi-generator = "app:create_app"
 
-[tool.uv]
-dev-dependencies = []
+[dependency-groups]
+dev = []
