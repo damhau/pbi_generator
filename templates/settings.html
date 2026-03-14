@@ -1,127 +1,152 @@
 {% extends "base.html" %}
 {% block title %}Settings - PBI Generator{% endblock %}
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-lg-8">
-        <h3 class="mb-4"><i class="bi bi-gear me-2"></i>Settings</h3>
+<div class="pbi-settings">
+    <div class="pbi-settings__header">
+        <span class="pbi-settings__header-icon"><i class="bi bi-gear"></i></span>
+        <h1 class="pbi-settings__header-title">Settings</h1>
+    </div>
 
-        <div id="settingsAlert" style="display:none;"></div>
+    <div id="settingsAlert" style="display:none;"></div>
 
-        <!-- OpenAI -->
-        <div class="card shadow-sm mb-4">
-            <div class="card-header"><h5 class="mb-0"><i class="bi bi-robot me-2"></i>OpenAI Configuration</h5></div>
-            <div class="card-body">
-                <div class="mb-3">
-                    <label for="openaiKey" class="form-label">API Key</label>
-                    <div class="input-group">
-                        <input type="password" class="form-control" id="openaiKey" placeholder="sk-...">
-                        <button class="btn btn-outline-secondary" type="button" onclick="toggleVisibility('openaiKey')">
-                            <i class="bi bi-eye"></i>
-                        </button>
-                    </div>
-                    <div class="form-text" id="openaiKeyHint"></div>
+    <!-- OpenAI -->
+    <div class="pbi-card">
+        <div class="pbi-card__header">
+            <h2 class="pbi-card__title">
+                <i class="bi bi-robot pbi-card__title-icon"></i>
+                OpenAI Configuration
+                <span class="pbi-dot" id="dotOpenai" title="Not configured"></span>
+            </h2>
+        </div>
+        <div class="pbi-card__body">
+            <div class="pbi-field">
+                <label for="openaiKey" class="pbi-label">API Key</label>
+                <div class="pbi-input-group">
+                    <input type="password" class="pbi-input" id="openaiKey" placeholder="sk-...">
+                    <button class="pbi-btn-icon" type="button" onclick="toggleVisibility('openaiKey')">
+                        <i class="bi bi-eye"></i>
+                    </button>
                 </div>
-                <div class="mb-0">
-                    <label for="openaiModel" class="form-label">Model</label>
-                    <select id="openaiModel" class="form-select">
-                        <option value="gpt-4o">gpt-4o</option>
-                        <option value="gpt-4o-mini">gpt-4o-mini</option>
-                        <option value="gpt-4-turbo">gpt-4-turbo</option>
-                        <option value="gpt-4">gpt-4</option>
-                        <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
-                    </select>
-                </div>
+                <div class="pbi-hint" id="openaiKeyHint"></div>
+            </div>
+            <div class="pbi-field">
+                <label for="openaiModel" class="pbi-label">Model</label>
+                <select id="openaiModel" class="pbi-select">
+                    <option value="gpt-5">gpt-5</option>
+                    <option value="gpt-4.1">gpt-4.1</option>
+                    <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+                    <option value="gpt-4o">gpt-4o</option>
+                    <option value="gpt-4o-mini">gpt-4o-mini</option>
+                </select>
             </div>
         </div>
+    </div>
 
-        <!-- Azure DevOps -->
-        <div class="card shadow-sm mb-4">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0"><i class="bi bi-cloud me-2"></i>Azure DevOps</h5>
-                <button class="btn btn-sm btn-outline-primary" id="testAzdoBtn">
-                    <i class="bi bi-plug me-1"></i>Test Connection
-                </button>
-            </div>
-            <div class="card-body">
-                <div class="row g-3">
-                    <div class="col-12">
-                        <label for="azdoOrgUrl" class="form-label">Organization URL</label>
-                        <input type="url" class="form-control" id="azdoOrgUrl" placeholder="https://dev.azure.com/your-org">
-                    </div>
-                    <div class="col-md-6">
-                        <label for="azdoProject" class="form-label">Project</label>
-                        <input type="text" class="form-control" id="azdoProject" placeholder="My Project">
-                    </div>
-                    <div class="col-md-6">
-                        <label for="azdoTeam" class="form-label">Team</label>
-                        <input type="text" class="form-control" id="azdoTeam" placeholder="My Team">
-                    </div>
-                    <div class="col-12">
-                        <label for="azdoAreaPath" class="form-label">Area Path</label>
-                        <input type="text" class="form-control" id="azdoAreaPath" placeholder="Project\Team\Area">
-                    </div>
-                    <div class="col-12">
-                        <label for="azdoPat" class="form-label">Personal Access Token</label>
-                        <div class="input-group">
-                            <input type="password" class="form-control" id="azdoPat" placeholder="PAT token">
-                            <button class="btn btn-outline-secondary" type="button" onclick="toggleVisibility('azdoPat')">
-                                <i class="bi bi-eye"></i>
-                            </button>
-                        </div>
-                        <div class="form-text" id="azdoPatHint"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Prompt -->
-        <div class="card shadow-sm mb-4">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0"><i class="bi bi-chat-text me-2"></i>PBI Generation Prompt</h5>
-                <button class="btn btn-sm btn-outline-secondary" id="resetPromptBtn">
-                    <i class="bi bi-arrow-counterclockwise me-1"></i>Reset to Default
-                </button>
-            </div>
-            <div class="card-body">
-                <textarea id="pbiPrompt" class="form-control font-monospace" rows="12"></textarea>
-                <div class="form-text mt-2">
-                    Available placeholders: <code>{user_request}</code>, <code>{features_context}</code>, <code>{selected_feature_id}</code>
-                </div>
-            </div>
-        </div>
-
-        <div class="d-grid mb-4">
-            <button class="btn btn-primary btn-lg" id="saveSettingsBtn">
-                <i class="bi bi-check-lg me-1"></i>Save Settings
+    <!-- Azure DevOps -->
+    <div class="pbi-card">
+        <div class="pbi-card__header">
+            <h2 class="pbi-card__title">
+                <i class="bi bi-cloud pbi-card__title-icon"></i>
+                Azure DevOps
+                <span class="pbi-dot" id="dotAzdo" title="Not configured"></span>
+            </h2>
+            <button class="pbi-btn pbi-btn--ghost pbi-btn--sm" id="testAzdoBtn">
+                <i class="bi bi-plug"></i> Test Connection
             </button>
         </div>
+        <div class="pbi-card__body">
+            <div class="pbi-field">
+                <label for="azdoOrgUrl" class="pbi-label">Organization URL</label>
+                <input type="url" class="pbi-input" id="azdoOrgUrl" placeholder="https://dev.azure.com/your-org">
+            </div>
+            <div class="pbi-row pbi-row--2 pbi-field">
+                <div>
+                    <label for="azdoProject" class="pbi-label">Project</label>
+                    <input type="text" class="pbi-input" id="azdoProject" placeholder="My Project">
+                </div>
+                <div>
+                    <label for="azdoTeam" class="pbi-label">Team</label>
+                    <input type="text" class="pbi-input" id="azdoTeam" placeholder="My Team">
+                </div>
+            </div>
+            <div class="pbi-field">
+                <label for="azdoAreaPath" class="pbi-label">Area Path</label>
+                <input type="text" class="pbi-input" id="azdoAreaPath" placeholder="Project\Team\Area">
+            </div>
+            <div class="pbi-field">
+                <label for="azdoPat" class="pbi-label">Personal Access Token</label>
+                <div class="pbi-input-group">
+                    <input type="password" class="pbi-input" id="azdoPat" placeholder="PAT token">
+                    <button class="pbi-btn-icon" type="button" onclick="toggleVisibility('azdoPat')">
+                        <i class="bi bi-eye"></i>
+                    </button>
+                </div>
+                <div class="pbi-hint" id="azdoPatHint"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Prompt -->
+    <div class="pbi-card">
+        <div class="pbi-card__header">
+            <h2 class="pbi-card__title">
+                <i class="bi bi-chat-text pbi-card__title-icon"></i>
+                PBI Generation Prompt
+            </h2>
+            <button class="pbi-btn pbi-btn--ghost pbi-btn--sm" id="resetPromptBtn">
+                <i class="bi bi-arrow-counterclockwise"></i> Reset to Default
+            </button>
+        </div>
+        <div class="pbi-card__body">
+            <textarea id="pbiPrompt" class="pbi-textarea pbi-textarea--mono" rows="12"></textarea>
+            <div class="pbi-hint" style="margin-top:0.5rem">
+                Placeholders: <span class="pbi-code">{user_request}</span>
+                <span class="pbi-code">{features_context}</span>
+                <span class="pbi-code">{selected_feature_id}</span>
+            </div>
+        </div>
+    </div>
+
+    <div style="margin-bottom:2rem">
+        <button class="pbi-btn pbi-btn--primary pbi-btn--lg pbi-btn--block" id="saveSettingsBtn">
+            <i class="bi bi-check-lg"></i> Save Settings
+        </button>
     </div>
 </div>
 {% endblock %}
 {% block scripts %}
 {% raw %}
 <script>
-const DEFAULT_PROMPT = `Create a scrum PBI for "{user_request}" and assign it to the right parent feature from the list below.
-Use the format: As a ..., I want to ... so that ...
+const DEFAULT_PROMPT = `Can you create a scrum pbi for "{user_request}" to assign it to the right parent feature you can look at the list below.
+Please use the format As a ..., I want to ... so that ...
 
 {features_context}
 
-Return a JSON object:
+Please return your response as a JSON object with the following structure:
 {{
     "title": "title",
     "description": "description",
     "acceptance_criteria": [],
-    "priority": <1-3>,
-    "effort": <1-13>,
-    "tags": ["draft"],
+    "priority": "you estimation of the priority between 1 and 3 (must be an integer)",
+    "effort": "you estimation of the effort in story points between 1 and 13 (must be an integer)",
+    "tags": ["draft","additional tags if relevant but not more than 3"],
     "parent_feature_id": {selected_feature_id}
 }}
 
-Rules for acceptance criteria:
-- Maximum 5 items
-- No generic criteria like "Rollback plan validated", "Review sign-off", "Monitoring/alerting checks"
-- If OpenShift related, add "Gitops repository updated" and "Deployed on IKSTEST and IKSPROD"
-- Order logically`;
+Additional instructions for the acceptance criteria:
+- do not do more than 5 acceptance criteria
+- not need to add acceptance criteria like "Rollback plan validated" "review sign-off" and "Monitoring/alerting checks in place" and "Go/No-Go criteria"
+- if it is an Openshift PBI always add "Gitops repository updated" in the acceptance criteria
+- if it is an Openshift PBI always add "Deployed on IKSTEST and IKSPROD" in the acceptance criteria
+- order the acceptance criteria in a logical order`;
+
+function checkAuth(res) {
+    if (res.redirected || res.url.includes('/login')) {
+        window.location.href = '/login';
+        return false;
+    }
+    return true;
+}
 
 function toggleVisibility(id) {
     const el = document.getElementById(id);
@@ -130,13 +155,14 @@ function toggleVisibility(id) {
 
 function showAlert(msg, type) {
     const el = document.getElementById('settingsAlert');
-    el.innerHTML = `<div class="alert alert-${type} alert-dismissible fade show"><i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-triangle'} me-1"></i>${msg}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>`;
+    el.innerHTML = `<div class="pbi-alert pbi-alert--${type}"><i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-triangle'}"></i>${msg}<button class="pbi-alert__close" onclick="this.parentElement.parentElement.style.display='none'">&times;</button></div>`;
     el.style.display = 'block';
 }
 
 async function loadSettings() {
     try {
         const res = await fetch('/api/settings');
+        if (!checkAuth(res)) return;
         const data = await res.json();
         document.getElementById('openaiModel').value = data.openai_model || 'gpt-4o';
         document.getElementById('azdoOrgUrl').value = data.azdo_org_url || '';
@@ -144,11 +170,23 @@ async function loadSettings() {
         document.getElementById('azdoTeam').value = data.azdo_team || '';
         document.getElementById('azdoAreaPath').value = data.azdo_area_path || '';
         document.getElementById('pbiPrompt').value = data.pbi_prompt || DEFAULT_PROMPT;
+        const dotOai = document.getElementById('dotOpenai');
         if (data.openai_api_key_masked) {
             document.getElementById('openaiKeyHint').textContent = 'Current: ' + data.openai_api_key_masked;
+            dotOai.classList.add('pbi-dot--ok');
+            dotOai.title = 'Configured';
+        } else {
+            dotOai.classList.remove('pbi-dot--ok');
+            dotOai.title = 'Not configured';
         }
+        const dotAzdo = document.getElementById('dotAzdo');
         if (data.azdo_pat_masked) {
             document.getElementById('azdoPatHint').textContent = 'Current: ' + data.azdo_pat_masked;
+            dotAzdo.classList.add('pbi-dot--ok');
+            dotAzdo.title = 'Configured';
+        } else {
+            dotAzdo.classList.remove('pbi-dot--ok');
+            dotAzdo.title = 'Not configured';
         }
     } catch (e) {
         showAlert('Failed to load settings.', 'danger');
@@ -172,6 +210,7 @@ document.getElementById('saveSettingsBtn').addEventListener('click', async () =>
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
         });
+        if (!checkAuth(res)) return;
         if (res.ok) {
             showAlert('Settings saved successfully.', 'success');
             loadSettings();
@@ -186,9 +225,10 @@ document.getElementById('saveSettingsBtn').addEventListener('click', async () =>
 document.getElementById('testAzdoBtn').addEventListener('click', async () => {
     const btn = document.getElementById('testAzdoBtn');
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Testing...';
+    btn.innerHTML = '<span class="pbi-spinner"></span> Testing...';
     try {
         const res = await fetch('/api/settings/test-azdo', { method: 'POST' });
+        if (!checkAuth(res)) return;
         const data = await res.json();
         if (res.ok) {
             showAlert('Azure DevOps connection successful!', 'success');
@@ -199,7 +239,7 @@ document.getElementById('testAzdoBtn').addEventListener('click', async () => {
         showAlert('Network error.', 'danger');
     } finally {
         btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-plug me-1"></i>Test Connection';
+        btn.innerHTML = '<i class="bi bi-plug"></i> Test Connection';
     }
 });
 

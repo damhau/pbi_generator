@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Account Created - PBI Generator{% endblock %}
+{% block content %}
+<div class="pbi-auth">
+    <div class="pbi-auth__card" style="text-align:center;">
+        <div style="margin-bottom:1.5rem;">
+            <div style="width:52px;height:52px;margin:0 auto 0.75rem;border-radius:12px;background:var(--green-50);border:1px solid var(--green-100);display:flex;align-items:center;justify-content:center;">
+                <i class="bi bi-check-lg" style="font-size:1.5rem;color:var(--green-600);"></i>
+            </div>
+            <h1 class="pbi-auth__logo-title">Account Created</h1>
+            <p style="color:var(--gray-500);font-size:0.82rem;margin-top:0.4rem;">Your account has been set up successfully. You can now sign in.</p>
+        </div>
+        <a href="{{ url_for('login', username=username) }}" class="pbi-btn pbi-btn--primary pbi-btn--lg pbi-btn--block">
+            <i class="bi bi-box-arrow-in-right"></i> Go to Login
+        </a>
+    </div>
+</div>
+{% endblock %}

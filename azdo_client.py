@@ -25,6 +25,7 @@ class AzDoClient:
         token = base64.b64encode(f":{self.pat}".encode()).decode()
         return {
             "Authorization": f"Basic {token}",
+            "User-Agent": "choco",
             "Accept": "application/json",
         }
 

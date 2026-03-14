@@ -3,7 +3,6 @@
 import json
 import logging
 import os
-import secrets
 
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
@@ -27,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 def create_app() -> Flask:
     app = Flask(__name__)
-    app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", secrets.token_hex(32))
+    app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-key-change-in-production")
     app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///pbi_generator.db")
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
@@ -88,8 +87,7 @@ def create_app() -> Flask:
             settings = UserSettings(user_id=user.id, pbi_prompt=DEFAULT_PROMPT)
             db.session.add(settings)
             db.session.commit()
-            flash("Account created. Please log in.", "success")
-            return redirect(url_for("login"))
+            return render_template("register_success.html", username=username)
         return render_template("register.html")
 
     @app.route("/logout")
@@ -185,12 +183,15 @@ def create_app() -> Flask:
     def list_epics():
         s = current_user.settings
         if not s or not s.azdo_pat:
+            logger.info("Epics 400: no settings or no PAT. has_settings=%s, has_pat=%s",
+                        s is not None, bool(s and s.azdo_pat))
             return jsonify({"error": "Azure DevOps not configured."}), 400
         try:
             azdo = AzDoClient(s.azdo_org_url, s.azdo_project, s.azdo_pat)
             epics = get_epics(azdo, s.azdo_area_path)
             return jsonify(epics)
         except Exception as e:
+            logger.exception("Epics error")
             return jsonify({"error": str(e)}), 400
 
     @app.route("/api/features", methods=["GET"])
@@ -255,7 +256,7 @@ def create_app() -> Flask:
             )
 
             response = oai.chat.completions.create(
-                model=s.openai_model or "gpt-4o",
+                model=s.openai_model or "gpt-5",
                 messages=[{"role": "user", "content": prompt}],
             )
 

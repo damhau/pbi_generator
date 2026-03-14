@@ -32,14 +32,14 @@ class UserSettings(db.Model):
 
     # OpenAI
     openai_api_key = db.Column(db.String(256), default="")
-    openai_model = db.Column(db.String(64), default="gpt-4o")
+    openai_model = db.Column(db.String(64), default="gpt-5")
 
     # Azure DevOps
-    azdo_org_url = db.Column(db.String(256), default="")
-    azdo_project = db.Column(db.String(128), default="")
-    azdo_team = db.Column(db.String(128), default="")
+    azdo_org_url = db.Column(db.String(256), default="https://tfs.ext.icrc.org/ICRCCollection")
+    azdo_project = db.Column(db.String(128), default="Hybrid Cloud Architecture")
+    azdo_team = db.Column(db.String(128), default="Cloud Native")
     azdo_pat = db.Column(db.String(256), default="")
-    azdo_area_path = db.Column(db.String(256), default="")
+    azdo_area_path = db.Column(db.String(256), default=r"Hybrid Cloud Architecture\Cloud Native Delivery")
 
     # PBI generation prompt
     pbi_prompt = db.Column(db.Text, default="")
@@ -57,25 +57,26 @@ class UserSettings(db.Model):
         }
 
 
-DEFAULT_PROMPT = """Create a scrum PBI for "{user_request}" and assign it to the right parent feature from the list below.
-Use the format: As a ..., I want to ... so that ...
+DEFAULT_PROMPT = """Can you create a scrum pbi for "{user_request}" to assign it to the right parent feature you can look at the list below.
+Please use the format As a ..., I want to ... so that ...
 
 {features_context}
 
-Return a JSON object:
+Please return your response as a JSON object with the following structure:
 {{
     "title": "title",
     "description": "description",
     "acceptance_criteria": [],
-    "priority": <1-3>,
-    "effort": <1-13>,
-    "tags": ["draft"],
+    "priority": "you estimation of the priority between 1 and 3 (must be an integer)",
+    "effort": "you estimation of the effort in story points between 1 and 13 (must be an integer)",
+    "tags": ["draft","additional tags if relevant but not more than 3"],
     "parent_feature_id": {selected_feature_id}
 }}
 
-Rules for acceptance criteria:
-- Maximum 5 items
-- No generic criteria like "Rollback plan validated", "Review sign-off", "Monitoring/alerting checks"
-- If OpenShift related, add "Gitops repository updated" and "Deployed on IKSTEST and IKSPROD"
-- Order logically
+Additional instructions for the acceptance criteria:
+- do not do more than 5 acceptance criteria
+- not need to add acceptance criteria like "Rollback plan validated" "review sign-off" and "Monitoring/alerting checks in place" and "Go/No-Go criteria"
+- if it is an Openshift PBI always add "Gitops repository updated" in the acceptance criteria
+- if it is an Openshift PBI always add "Deployed on IKSTEST and IKSPROD" in the acceptance criteria
+- order the acceptance criteria in a logical order
 """

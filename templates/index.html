@@ -1,98 +1,102 @@
 {% extends "base.html" %}
 {% block title %}Generate PBI - PBI Generator{% endblock %}
 {% block content %}
-<div class="row g-4">
+<div class="pbi-grid">
     <!-- Left panel: Input -->
-    <div class="col-lg-5">
-        <div class="card shadow-sm h-100">
-            <div class="card-header bg-primary bg-opacity-10">
-                <h5 class="mb-0"><i class="bi bi-pencil-square me-2"></i>New PBI Request</h5>
+    <div>
+        <div class="pbi-card">
+            <div class="pbi-card__header">
+                <h2 class="pbi-card__title">
+                    <i class="bi bi-pencil-square pbi-card__title-icon"></i>
+                    New Request
+                </h2>
             </div>
-            <div class="card-body">
+            <div class="pbi-card__body">
                 <form id="pbiForm">
-                    <div class="mb-3">
-                        <label for="epicSelect" class="form-label fw-semibold">Epic</label>
-                        <div class="input-group">
-                            <select id="epicSelect" class="form-select">
+                    <div class="pbi-field">
+                        <label for="epicSelect" class="pbi-label">Epic</label>
+                        <div class="pbi-input-group">
+                            <select id="epicSelect" class="pbi-select">
                                 <option value="">-- Loading epics... --</option>
                             </select>
-                            <button type="button" class="btn btn-outline-secondary" id="refreshEpics" title="Refresh epics">
+                            <button type="button" class="pbi-btn-icon" id="refreshEpics" title="Refresh epics">
                                 <i class="bi bi-arrow-clockwise"></i>
                             </button>
                         </div>
-                        <div class="form-text">Select an epic to auto-assign parent feature.</div>
+                        <div class="pbi-hint">Select an epic to auto-assign parent feature</div>
                     </div>
 
-                    <div class="mb-3">
-                        <label for="pbiRequest" class="form-label fw-semibold">Request Description</label>
-                        <textarea id="pbiRequest" class="form-control" rows="4" placeholder="Describe the PBI you want to create..." required></textarea>
+                    <div class="pbi-field">
+                        <label for="pbiRequest" class="pbi-label">Request Description</label>
+                        <textarea id="pbiRequest" class="pbi-textarea" rows="4" placeholder="Describe the PBI you want to create..." required></textarea>
                     </div>
 
-                    <div class="row g-2 mb-3">
-                        <div class="col">
-                            <label class="form-label fw-semibold">Sprint Target</label>
-                            <select id="sprintTarget" class="form-select">
+                    <div class="pbi-row pbi-row--2 pbi-field">
+                        <div>
+                            <label for="sprintTarget" class="pbi-label">Sprint Target</label>
+                            <select id="sprintTarget" class="pbi-select">
                                 <option value="next">Next Sprint</option>
                                 <option value="current">Current Sprint</option>
                                 <option value="backlog">Backlog</option>
                             </select>
                         </div>
-                        <div class="col">
-                            <label class="form-label fw-semibold">On Duplicate</label>
-                            <select id="duplicateAction" class="form-select">
+                        <div>
+                            <label for="duplicateAction" class="pbi-label">On Duplicate</label>
+                            <select id="duplicateAction" class="pbi-select">
                                 <option value="skip">Skip</option>
                                 <option value="update">Update Existing</option>
                             </select>
                         </div>
                     </div>
 
-                    <div class="d-grid gap-2">
-                        <button type="submit" class="btn btn-primary btn-lg" id="generateBtn">
-                            <i class="bi bi-stars me-1"></i>Generate PBI
-                        </button>
-                    </div>
+                    <button type="submit" class="pbi-btn pbi-btn--primary pbi-btn--lg pbi-btn--block" id="generateBtn">
+                        <i class="bi bi-stars"></i> Generate PBI
+                    </button>
                 </form>
             </div>
         </div>
     </div>
 
     <!-- Right panel: Preview & Create -->
-    <div class="col-lg-7">
+    <div>
         <!-- Preview card -->
-        <div class="card shadow-sm mb-3" id="previewCard" style="display:none;">
-            <div class="card-header bg-success bg-opacity-10 d-flex justify-content-between align-items-center">
-                <h5 class="mb-0"><i class="bi bi-eye me-2"></i>Generated PBI Preview</h5>
-                <div>
-                    <button class="btn btn-sm btn-outline-secondary me-1" id="editToggle" title="Edit">
-                        <i class="bi bi-pencil"></i>
-                    </button>
-                </div>
-            </div>
-            <div class="card-body" id="previewBody">
-                <!-- Filled dynamically -->
-            </div>
-            <div class="card-footer d-flex gap-2">
-                <button class="btn btn-success flex-fill" id="createBtn">
-                    <i class="bi bi-cloud-upload me-1"></i>Create in Azure DevOps
+        <div class="pbi-card" id="previewCard" style="display:none;">
+            <div class="pbi-card__header">
+                <h2 class="pbi-card__title">
+                    <i class="bi bi-eye pbi-card__title-icon"></i>
+                    Preview
+                </h2>
+                <button class="pbi-btn-icon" id="editToggle" title="Edit">
+                    <i class="bi bi-pencil"></i>
                 </button>
-                <button class="btn btn-outline-secondary" id="regenerateBtn">
-                    <i class="bi bi-arrow-repeat me-1"></i>Regenerate
+            </div>
+            <div class="pbi-card__body" id="previewBody">
+                <!-- Filled dynamically by app.js -->
+            </div>
+            <div class="pbi-card__footer">
+                <button class="pbi-btn pbi-btn--success flex-fill" id="createBtn">
+                    <i class="bi bi-cloud-upload"></i> Create in Azure DevOps
+                </button>
+                <button class="pbi-btn pbi-btn--ghost" id="regenerateBtn">
+                    <i class="bi bi-arrow-repeat"></i> Regenerate
                 </button>
             </div>
         </div>
 
         <!-- Result card -->
-        <div class="card shadow-sm" id="resultCard" style="display:none;">
-            <div class="card-body text-center py-4" id="resultBody">
-                <!-- Filled dynamically -->
+        <div class="pbi-card" id="resultCard" style="display:none;">
+            <div class="pbi-card__body" id="resultBody">
+                <!-- Filled dynamically by app.js -->
             </div>
         </div>
 
         <!-- Empty state -->
-        <div id="emptyState" class="text-center text-body-secondary py-5">
-            <i class="bi bi-lightbulb display-1"></i>
-            <h4 class="mt-3">Ready to Generate</h4>
-            <p>Describe your PBI request and click Generate.<br>AI will create a structured Product Backlog Item for you.</p>
+        <div id="emptyState" class="pbi-empty">
+            <div class="pbi-empty__icon">
+                <i class="bi bi-lightbulb"></i>
+            </div>
+            <h3 class="pbi-empty__title">Ready to Generate</h3>
+            <p class="pbi-empty__text">Describe your PBI request and click Generate. AI will create a structured Product Backlog Item for you.</p>
         </div>
     </div>
 </div>
