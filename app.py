@@ -20,7 +20,11 @@ from azdo_client import (
     validate_parent_feature,
 )
 
-logging.basicConfig(level=getattr(logging, os.environ.get("LOG_LEVEL", "INFO").upper(), logging.INFO))
+_log_level = getattr(logging, os.environ.get("LOG_LEVEL", "INFO").upper(), logging.INFO)
+logging.basicConfig(level=_log_level)
+# Quiet noisy third-party loggers
+for _name in ("urllib3", "httpcore", "httpx", "openai"):
+    logging.getLogger(_name).setLevel(max(_log_level, logging.WARNING))
 logger = logging.getLogger(__name__)
 
 ADMIN_USERNAMES = {"dhauser", "damien"}

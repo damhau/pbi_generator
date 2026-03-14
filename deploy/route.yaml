@@ -2,6 +2,8 @@ apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
   name: pbi-generator
+  annotations:
+    haproxy.router.openshift.io/timeout: 120s
   labels:
     app: pbi-generator
 spec:
