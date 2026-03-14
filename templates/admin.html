@@ -44,6 +44,16 @@ function checkAuth(res) {
     return true;
 }
 
+async function safeJson(res) {
+    const text = await res.text();
+    try {
+        return JSON.parse(text);
+    } catch (e) {
+        console.error('Response was not JSON:', text.substring(0, 200));
+        throw new Error(`Server returned an unexpected response (HTTP ${res.status}). Check server logs.`);
+    }
+}
+
 function showAlert(msg, type) {
     const el = document.getElementById('adminAlert');
     el.innerHTML = `<div class="pbi-alert pbi-alert--${type}"><i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-triangle'}"></i>${msg}<button class="pbi-alert__close" onclick="this.parentElement.parentElement.style.display='none'">&times;</button></div>`;
@@ -55,7 +65,7 @@ async function loadUsers() {
         const res = await fetch('/api/admin/users');
         if (!checkAuth(res)) return;
         if (!res.ok) { showAlert('Failed to load users.', 'danger'); return; }
-        const users = await res.json();
+        const users = await safeJson(res);
         const tbody = document.getElementById('usersTableBody');
         if (!users.length) {
             tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--gray-400);padding:2rem;">No users found.</td></tr>';
@@ -89,7 +99,7 @@ async function deleteUser(id, username) {
     try {
         const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
         if (!checkAuth(res)) return;
-        const data = await res.json();
+        const data = await safeJson(res);
         if (res.ok) {
             showAlert(`User "${username}" deleted.`, 'success');
             loadUsers();

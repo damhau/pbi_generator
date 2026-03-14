@@ -20,7 +20,7 @@ from azdo_client import (
     validate_parent_feature,
 )
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 ADMIN_USERNAMES = {"dhauser", "damien"}
@@ -33,15 +33,27 @@ def is_admin():
 def get_openai_key(settings):
     """Return the effective OpenAI API key (system or personal)."""
     if settings and settings.use_own_openai_key:
+        logger.debug("Using personal OpenAI key for user_id=%s", settings.user_id)
         return settings.openai_api_key or ""
-    return os.environ.get("SYSTEM_OPENAI_API_KEY", "") or (settings.openai_api_key if settings else "")
+    system_key = os.environ.get("SYSTEM_OPENAI_API_KEY", "")
+    if system_key:
+        logger.debug("Using system OpenAI key for user_id=%s", settings.user_id if settings else "?")
+        return system_key
+    logger.debug("Falling back to personal OpenAI key for user_id=%s", settings.user_id if settings else "?")
+    return settings.openai_api_key if settings else ""
 
 
 def get_azdo_pat(settings):
     """Return the effective Azure DevOps PAT (system or personal)."""
     if settings and settings.use_own_azdo_pat:
+        logger.debug("Using personal AzDO PAT for user_id=%s", settings.user_id)
         return settings.azdo_pat or ""
-    return os.environ.get("SYSTEM_AZDO_PAT", "") or (settings.azdo_pat if settings else "")
+    system_pat = os.environ.get("SYSTEM_AZDO_PAT", "")
+    if system_pat:
+        logger.debug("Using system AzDO PAT for user_id=%s", settings.user_id if settings else "?")
+        return system_pat
+    logger.debug("Falling back to personal AzDO PAT for user_id=%s", settings.user_id if settings else "?")
+    return settings.azdo_pat if settings else ""
 
 
 def create_app() -> Flask:
@@ -71,8 +83,10 @@ def create_app() -> Flask:
             cols = [c["name"] for c in inspector.get_columns("user_settings")]
             if "use_own_openai_key" not in cols:
                 conn.execute(text("ALTER TABLE user_settings ADD COLUMN use_own_openai_key BOOLEAN DEFAULT 0"))
+                logger.info("Added use_own_openai_key column to user_settings")
             if "use_own_azdo_pat" not in cols:
                 conn.execute(text("ALTER TABLE user_settings ADD COLUMN use_own_azdo_pat BOOLEAN DEFAULT 0"))
+                logger.info("Added use_own_azdo_pat column to user_settings")
             conn.commit()
 
     @app.context_processor
@@ -91,7 +105,9 @@ def create_app() -> Flask:
             user = User.query.filter_by(username=username).first()
             if user and user.check_password(password):
                 login_user(user)
+                logger.info("User '%s' logged in", username)
                 return redirect(url_for("index"))
+            logger.info("Failed login attempt for username='%s'", username)
             flash("Invalid username or password.", "danger")
         return render_template("login.html")
 
@@ -122,12 +138,14 @@ def create_app() -> Flask:
             settings = UserSettings(user_id=user.id, pbi_prompt=DEFAULT_PROMPT)
             db.session.add(settings)
             db.session.commit()
+            logger.info("New user registered: '%s' (id=%s)", username, user.id)
             return render_template("register_success.html", username=username)
         return render_template("register.html")
 
     @app.route("/logout")
     @login_required
     def logout():
+        logger.info("User '%s' logged out", current_user.username)
         logout_user()
         return redirect(url_for("login"))
 
@@ -153,6 +171,7 @@ def create_app() -> Flask:
     @login_required
     def admin_page():
         if not is_admin():
+            logger.info("Non-admin user '%s' tried to access /admin", current_user.username)
             abort(403)
         return render_template("admin.html")
 
@@ -174,6 +193,7 @@ def create_app() -> Flask:
                     or not (u.settings.use_own_azdo_pat if u.settings else True)
                 ),
             })
+        logger.debug("Admin listed %d users", len(result))
         return jsonify(result)
 
     @app.route("/api/admin/users/<int:user_id>", methods=["DELETE"])
@@ -186,6 +206,7 @@ def create_app() -> Flask:
         user = db.session.get(User, user_id)
         if not user:
             return jsonify({"error": "User not found."}), 404
+        logger.info("Admin '%s' deleting user '%s' (id=%s)", current_user.username, user.username, user_id)
         db.session.delete(user)
         db.session.commit()
         return jsonify({"status": "ok"})
@@ -200,6 +221,7 @@ def create_app() -> Flask:
             s = UserSettings(user_id=current_user.id, pbi_prompt=DEFAULT_PROMPT)
             db.session.add(s)
             db.session.commit()
+            logger.info("Created default settings for user '%s'", current_user.username)
         data = s.to_dict()
         # Mask secrets for display
         if data["openai_api_key"]:
@@ -246,6 +268,8 @@ def create_app() -> Flask:
             s.use_own_azdo_pat = bool(data["use_own_azdo_pat"])
 
         db.session.commit()
+        logger.info("Settings updated for user '%s' (use_own_openai=%s, use_own_azdo=%s)",
+                     current_user.username, s.use_own_openai_key, s.use_own_azdo_pat)
         return jsonify({"status": "ok"})
 
     @app.route("/api/settings/test-azdo", methods=["POST"])
@@ -254,12 +278,18 @@ def create_app() -> Flask:
         s = current_user.settings
         pat = get_azdo_pat(s)
         if not s or not pat or not s.azdo_org_url or not s.azdo_project:
+            logger.info("AzDO test failed for user '%s': incomplete settings (has_pat=%s, org=%s, project=%s)",
+                        current_user.username, bool(pat), bool(s and s.azdo_org_url), bool(s and s.azdo_project))
             return jsonify({"status": "error", "message": "Azure DevOps settings are incomplete."}), 400
         try:
+            logger.info("Testing AzDO connection for user '%s' to %s/%s",
+                        current_user.username, s.azdo_org_url, s.azdo_project)
             azdo = AzDoClient(s.azdo_org_url, s.azdo_project, pat)
             azdo.get_project_info()
+            logger.info("AzDO connection test succeeded for user '%s'", current_user.username)
             return jsonify({"status": "ok", "message": "Connected successfully."})
         except Exception as e:
+            logger.exception("AzDO connection test failed for user '%s'", current_user.username)
             return jsonify({"status": "error", "message": str(e)}), 400
 
     # ── Epic / Feature API ───────────────────────────────────────
@@ -270,15 +300,17 @@ def create_app() -> Flask:
         s = current_user.settings
         pat = get_azdo_pat(s)
         if not s or not pat:
-            logger.info("Epics 400: no settings or no PAT. has_settings=%s, has_pat=%s",
-                        s is not None, bool(pat))
+            logger.info("Epics 400 for user '%s': no settings or no PAT (has_settings=%s, has_pat=%s)",
+                        current_user.username, s is not None, bool(pat))
             return jsonify({"error": "Azure DevOps not configured."}), 400
         try:
+            logger.debug("Fetching epics for user '%s', area_path='%s'", current_user.username, s.azdo_area_path)
             azdo = AzDoClient(s.azdo_org_url, s.azdo_project, pat)
             epics = get_epics(azdo, s.azdo_area_path)
+            logger.info("Fetched %d epics for user '%s'", len(epics), current_user.username)
             return jsonify(epics)
         except Exception as e:
-            logger.exception("Epics error")
+            logger.exception("Epics error for user '%s'", current_user.username)
             return jsonify({"error": str(e)}), 400
 
     @app.route("/api/features", methods=["GET"])
@@ -287,15 +319,19 @@ def create_app() -> Flask:
         s = current_user.settings
         pat = get_azdo_pat(s)
         if not s or not pat:
+            logger.info("Features 400 for user '%s': AzDO not configured", current_user.username)
             return jsonify({"error": "Azure DevOps not configured."}), 400
         epic_title = request.args.get("epic_title", "")
         if not epic_title:
             return jsonify({"error": "epic_title parameter required."}), 400
         try:
+            logger.debug("Fetching features for user '%s', epic='%s'", current_user.username, epic_title)
             azdo = AzDoClient(s.azdo_org_url, s.azdo_project, pat)
             features = get_features_from_epic(azdo, epic_title, s.azdo_area_path)
+            logger.info("Fetched %d features for epic '%s'", len(features), epic_title)
             return jsonify(features)
         except Exception as e:
+            logger.exception("Features error for user '%s', epic='%s'", current_user.username, epic_title)
             return jsonify({"error": str(e)}), 400
 
     # ── PBI Generation API ───────────────────────────────────────
@@ -306,6 +342,7 @@ def create_app() -> Flask:
         s = current_user.settings
         openai_key = get_openai_key(s)
         if not openai_key:
+            logger.info("Generate 400 for user '%s': no OpenAI key", current_user.username)
             return jsonify({"error": "OpenAI API key not configured."}), 400
 
         data = request.get_json()
@@ -315,6 +352,9 @@ def create_app() -> Flask:
 
         if not user_request:
             return jsonify({"error": "Request description is required."}), 400
+
+        logger.info("Generating PBI for user '%s': request='%s', epic='%s'",
+                     current_user.username, user_request[:80], epic_title)
 
         try:
             oai = OpenAI(api_key=openai_key)
@@ -329,6 +369,7 @@ def create_app() -> Flask:
                 features_context = f"**PARENT FEATURE OVERRIDE**: Use feature ID {parent_feature_id}."
                 selected_feature_id = str(parent_feature_id)
             elif epic_title and pat:
+                logger.debug("Fetching features for epic '%s' to build prompt context", epic_title)
                 azdo = AzDoClient(s.azdo_org_url, s.azdo_project, pat)
                 available_features = get_features_from_epic(azdo, epic_title, s.azdo_area_path)
                 if available_features:
@@ -345,12 +386,15 @@ def create_app() -> Flask:
                 selected_feature_id=selected_feature_id,
             )
 
+            logger.debug("Calling OpenAI model=%s for user '%s'", s.openai_model or "gpt-5", current_user.username)
             response = oai.chat.completions.create(
                 model=s.openai_model or "gpt-5",
                 messages=[{"role": "user", "content": prompt}],
             )
 
             content = response.choices[0].message.content.strip()
+            logger.debug("OpenAI raw response (first 200 chars): %s", content[:200])
+
             # Strip markdown code fences
             if content.startswith("```json"):
                 content = content[7:]
@@ -365,6 +409,7 @@ def create_app() -> Flask:
             # Validate
             for field in ("title", "description", "acceptance_criteria", "priority", "effort"):
                 if field not in pbi_data:
+                    logger.info("Generated PBI missing field '%s'", field)
                     return jsonify({"error": f"Missing field: {field}"}), 400
 
             # Normalize parent_feature_id
@@ -388,11 +433,15 @@ def create_app() -> Flask:
                         break
             pbi_data["parent_feature_name"] = pf_name
 
+            logger.info("PBI generated successfully for user '%s': title='%s'",
+                        current_user.username, pbi_data.get("title", "")[:60])
             return jsonify(pbi_data)
 
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            logger.exception("Failed to parse AI response as JSON for user '%s'", current_user.username)
             return jsonify({"error": "Failed to parse AI response as JSON. Try again."}), 400
         except Exception as e:
+            logger.exception("Generate error for user '%s'", current_user.username)
             return jsonify({"error": str(e)}), 500
 
     @app.route("/api/create", methods=["POST"])
@@ -401,6 +450,7 @@ def create_app() -> Flask:
         s = current_user.settings
         pat = get_azdo_pat(s)
         if not s or not pat:
+            logger.info("Create 400 for user '%s': AzDO not configured", current_user.username)
             return jsonify({"error": "Azure DevOps not configured."}), 400
 
         data = request.get_json()
@@ -412,26 +462,33 @@ def create_app() -> Flask:
         if not pbi_data:
             return jsonify({"error": "PBI data is required."}), 400
 
+        logger.info("Creating PBI for user '%s': title='%s', next_sprint=%s, backlog=%s",
+                     current_user.username, pbi_data.get("title", "")[:60], next_sprint, backlog)
+
         try:
             azdo = AzDoClient(s.azdo_org_url, s.azdo_project, pat)
 
             # Validate parent feature
             if pbi_data.get("parent_feature_id"):
                 if not validate_parent_feature(azdo, pbi_data["parent_feature_id"]):
+                    logger.info("Parent feature %s validation failed, removing link", pbi_data["parent_feature_id"])
                     pbi_data["parent_feature_id"] = None
 
             # Resolve iteration
             iteration_path = None
             if not backlog:
                 iteration_path = get_target_iteration_path(azdo, s.azdo_team, next_sprint)
+                logger.debug("Resolved iteration: %s", iteration_path)
 
             # Check for existing
             existing_id = find_existing_pbi_by_title(azdo, s.azdo_area_path, iteration_path, pbi_data["title"])
 
             if existing_id and update_existing:
+                logger.info("Updating existing PBI #%s", existing_id)
                 wi = update_pbi_in_azdo(azdo, existing_id, pbi_data)
                 action = "updated"
             elif existing_id:
+                logger.info("PBI already exists #%s, not updating", existing_id)
                 return jsonify({
                     "error": f"PBI '{pbi_data['title']}' already exists (#{existing_id}). Enable 'Update existing' to overwrite.",
                     "existing_id": existing_id,
@@ -443,6 +500,7 @@ def create_app() -> Flask:
             pbi_id = wi.get("id")
             pbi_url = wi.get("_links", {}).get("html", {}).get("href")
 
+            logger.info("PBI #%s %s for user '%s'", pbi_id, action, current_user.username)
             return jsonify({
                 "status": "ok",
                 "action": action,
@@ -452,6 +510,7 @@ def create_app() -> Flask:
             })
 
         except Exception as e:
+            logger.exception("Create PBI error for user '%s'", current_user.username)
             return jsonify({"error": str(e)}), 500
 
     return app

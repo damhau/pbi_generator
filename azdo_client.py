@@ -33,12 +33,16 @@ class AzDoClient:
         h = self._auth_header.copy()
         if headers:
             h.update(headers)
+        logger.debug("AzDO %s %s", method, url)
         resp = requests.request(method, url, headers=h, timeout=30, **kwargs)
+        logger.debug("AzDO response: %s (%d bytes)", resp.status_code, len(resp.content))
         if resp.status_code >= 400:
+            logger.info("AzDO error %s %s: HTTP %s - %s", method, url, resp.status_code, resp.text[:200])
             raise RuntimeError(f"HTTP {resp.status_code}: {resp.text[:500]}")
         try:
             return resp.json()
         except json.JSONDecodeError as e:
+            logger.info("AzDO non-JSON response from %s %s: %s", method, url, resp.text[:200])
             raise RuntimeError(f"Failed to parse JSON response: {e}")
 
     def get_project_info(self) -> Dict[str, Any]:
@@ -254,15 +258,19 @@ def validate_parent_feature(azdo: AzDoClient, feature_id: int, available_feature
     try:
         if available_features:
             if feature_id not in [f["id"] for f in available_features]:
+                logger.debug("Feature %s not in available features list", feature_id)
                 return False
         data = azdo.get_work_item(feature_id)
         fields = data.get("fields", {})
         if fields.get("System.WorkItemType") != "Feature":
+            logger.debug("Work item %s is not a Feature (type=%s)", feature_id, fields.get("System.WorkItemType"))
             return False
         if fields.get("System.State") == "Removed":
+            logger.debug("Feature %s is in Removed state", feature_id)
             return False
         return True
-    except Exception:
+    except Exception as e:
+        logger.info("Failed to validate parent feature %s: %s", feature_id, e)
         return False
 
 

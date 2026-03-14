@@ -14,6 +14,16 @@ function checkAuth(res) {
     return true;
 }
 
+async function safeJson(res) {
+    const text = await res.text();
+    try {
+        return JSON.parse(text);
+    } catch (e) {
+        console.error('Response was not JSON:', text.substring(0, 200));
+        throw new Error(`Server returned an unexpected response (HTTP ${res.status}). Check server logs.`);
+    }
+}
+
 // ── Epic loading ──────────────────────────────────────────────
 
 async function loadEpics() {
@@ -26,7 +36,7 @@ async function loadEpics() {
             sel.innerHTML = '<option value="">-- Configure Azure DevOps in Settings --</option>';
             return;
         }
-        const epics = await res.json();
+        const epics = await safeJson(res);
         sel.innerHTML = '<option value="">-- Select an Epic --</option>';
         epics.forEach(e => {
             const opt = document.createElement('option');
@@ -86,7 +96,7 @@ async function generatePbi() {
         if (epicTitle) {
             try {
                 const featRes = await fetch(`/api/features?epic_title=${encodeURIComponent(epicTitle)}`);
-                if (featRes.ok) cachedFeatures = await featRes.json();
+                if (featRes.ok) cachedFeatures = await safeJson(featRes);
             } catch (_) { /* ignore, features dropdown will be empty */ }
         } else {
             cachedFeatures = [];
@@ -99,7 +109,7 @@ async function generatePbi() {
         });
         clearInterval(stepTimer);
         if (!checkAuth(res)) return;
-        const data = await res.json();
+        const data = await safeJson(res);
 
         if (!res.ok) {
             showResult('danger', data.error || 'Generation failed.');
@@ -242,7 +252,7 @@ document.getElementById('createBtn')?.addEventListener('click', async () => {
             }),
         });
         if (!checkAuth(res)) return;
-        const data = await res.json();
+        const data = await safeJson(res);
 
         if (!res.ok) {
             showResult('danger', data.error || 'Creation failed.');

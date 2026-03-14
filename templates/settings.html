@@ -168,6 +168,16 @@ function checkAuth(res) {
     return true;
 }
 
+async function safeJson(res) {
+    const text = await res.text();
+    try {
+        return JSON.parse(text);
+    } catch (e) {
+        console.error('Response was not JSON:', text.substring(0, 200));
+        throw new Error(`Server returned an unexpected response (HTTP ${res.status}). Check server logs.`);
+    }
+}
+
 function toggleVisibility(id) {
     const el = document.getElementById(id);
     el.type = el.type === 'password' ? 'text' : 'password';
@@ -232,7 +242,7 @@ async function loadSettings() {
     try {
         const res = await fetch('/api/settings');
         if (!checkAuth(res)) return;
-        const data = await res.json();
+        const data = await safeJson(res);
         document.getElementById('openaiModel').value = data.openai_model || 'gpt-4o';
         document.getElementById('azdoOrgUrl').value = data.azdo_org_url || '';
         document.getElementById('azdoProject').value = data.azdo_project || '';
@@ -297,7 +307,7 @@ document.getElementById('saveSettingsBtn').addEventListener('click', async () =>
             showAlert('Failed to save settings.', 'danger');
         }
     } catch (e) {
-        showAlert('Network error.', 'danger');
+        showAlert('Network error: ' + e.message, 'danger');
     }
 });
 
@@ -308,14 +318,14 @@ document.getElementById('testAzdoBtn').addEventListener('click', async () => {
     try {
         const res = await fetch('/api/settings/test-azdo', { method: 'POST' });
         if (!checkAuth(res)) return;
-        const data = await res.json();
+        const data = await safeJson(res);
         if (res.ok) {
             showAlert('Azure DevOps connection successful!', 'success');
         } else {
             showAlert('Connection failed: ' + data.message, 'danger');
         }
     } catch (e) {
-        showAlert('Network error.', 'danger');
+        showAlert('Network error: ' + e.message, 'danger');
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-plug"></i> Test Connection';
