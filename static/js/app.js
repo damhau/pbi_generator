@@ -4,6 +4,7 @@
 
 let currentPbiData = null;
 let isEditing = false;
+let cachedFeatures = [];
 
 function checkAuth(res) {
     if (res.redirected || res.url.includes('/login')) {
@@ -81,6 +82,16 @@ async function generatePbi() {
     }, 2500);
 
     try {
+        // Fetch features for the selected epic (for the dropdown)
+        if (epicTitle) {
+            try {
+                const featRes = await fetch(`/api/features?epic_title=${encodeURIComponent(epicTitle)}`);
+                if (featRes.ok) cachedFeatures = await featRes.json();
+            } catch (_) { /* ignore, features dropdown will be empty */ }
+        } else {
+            cachedFeatures = [];
+        }
+
         const res = await fetch('/api/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -142,10 +153,12 @@ function renderPreview(data) {
                         ${[1,2,3,5,8,13].map(v => `<option value="${v}" ${data.effort === v ? 'selected' : ''}>${v} pts</option>`).join('')}
                     </select>
                 </div>
-                <div class="pbi-preview__inline-field">
+                <div class="pbi-preview__inline-field" style="grid-column: span 2;">
                     <label class="pbi-label">Parent Feature</label>
-                    <input type="number" class="pbi-input" id="inlineParentFeature" placeholder="Feature ID" value="${data.parent_feature_id || ''}">
-                    ${data.parent_feature_name ? `<div class="pbi-hint">${escHtml(data.parent_feature_name)}</div>` : ''}
+                    <select class="pbi-select" id="inlineParentFeature">
+                        <option value="">-- None --</option>
+                        ${cachedFeatures.map(f => `<option value="${f.id}" ${data.parent_feature_id === f.id ? 'selected' : ''}>${escHtml(f.title)} (#${f.id})</option>`).join('')}
+                    </select>
                 </div>
             </div>
             <div class="pbi-preview__meta" style="margin-top:0.75rem;">
@@ -181,8 +194,10 @@ function renderPreview(data) {
         currentPbiData.effort = parseInt(e.target.value) || 3;
     };
     document.getElementById('inlineParentFeature').onchange = (e) => {
-        const val = e.target.value.trim();
-        currentPbiData.parent_feature_id = val ? parseInt(val) || null : null;
+        const val = e.target.value;
+        currentPbiData.parent_feature_id = val ? parseInt(val) : null;
+        const feat = cachedFeatures.find(f => f.id === currentPbiData.parent_feature_id);
+        currentPbiData.parent_feature_name = feat ? feat.title : null;
     };
 
     document.getElementById('editToggle').onclick = () => {

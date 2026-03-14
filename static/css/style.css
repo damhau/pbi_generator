@@ -244,6 +244,8 @@ main.pbi-main {
   border: 1px solid var(--gray-200);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
+  max-height: 600px;
+  overflow-y: auto;
 }
 
 .pbi-card__header {
@@ -472,7 +474,7 @@ main.pbi-main {
 /* ── Two-column Layout (Index) ──────────────────────────── */
 .pbi-grid {
   display: grid;
-  grid-template-columns: 500px 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 1.25rem;
   align-items: start;
 }
@@ -571,7 +573,7 @@ main.pbi-main {
 
 .pbi-preview__inline-fields {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 0.65rem;
   padding: 0.75rem;
   background: var(--gray-50);
